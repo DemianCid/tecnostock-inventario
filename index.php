@@ -53,7 +53,7 @@ $productos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                     <td><?= htmlspecialchars($producto['nombre']) ?></td>
                                     <td><?= htmlspecialchars($producto['categoria'] ?? 'Sin categoría') ?></td>
                                     <td><?= $producto['stock_actual'] ?></td>
-                                    <td>$<?= number_format($producto['precio'], 2, '.', '') ?></td>
+                                    <td>$<?= number_format($producto['precio'], 0, '', '.') ?></td>
                                 </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
