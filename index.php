@@ -169,7 +169,16 @@ $productos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <h3 class="fw-bold text-dark mb-1">Catálogo de Productos</h3>
                 <p class="text-muted small mb-0">Control de inventario, stock y movimientos de existencias.</p>
             </div>
-            <div class="d-flex gap-2">
+            <div class="d-flex gap-2 flex-wrap">
+                <a href="nueva_venta.php" class="btn btn-success btn-sm rounded-2 fw-medium d-flex align-items-center gap-1">
+                    🛒 Nueva Venta
+                </a>
+                <a href="ventas.php" class="btn btn-outline-success btn-sm rounded-2 fw-medium d-flex align-items-center gap-1">
+                    📊 Ventas
+                </a>
+                <a href="historial.php" class="btn btn-outline-secondary rounded-2 fw-medium btn-sm d-flex align-items-center gap-1">
+                    📋 Historial
+                </a>
                 <a href="registrar_movimiento.php" class="btn btn-outline-dark rounded-2 fw-medium btn-sm d-flex align-items-center gap-2">
                     📦 Movimiento
                 </a>
