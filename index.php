@@ -21,9 +21,10 @@ $sql = "
 $params = [];
 
 if (!empty($buscar)) {
-    $sql .= " AND (p.nombre LIKE :buscar1 OR p.codigo LIKE :buscar2)";
+    $sql .= " AND (p.nombre LIKE :buscar1 OR p.codigo LIKE :buscar2 OR c.nombre LIKE :buscar3)";
     $params[':buscar1'] = '%' . $buscar . '%';
     $params[':buscar2'] = '%' . $buscar . '%';
+    $params[':buscar3'] = '%' . $buscar . '%';
 }
 
 $sql .= " ORDER BY p.id DESC";
