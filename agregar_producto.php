@@ -12,7 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $nombre = trim($_POST['nombre']);
     $categoria_id = $_POST['categoria_id'] ?: null;
     $stock_actual = (int)$_POST['stock_actual'];
-    $precio = (float)$_POST['precio'];
+    $precio = round((float)$_POST['precio']); // Redondea a número entero
 
     if (!empty($codigo) && !empty($nombre) && $precio > 0) {
         try {
@@ -81,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Precio</label>
-                            <input type="number" step="0.01" name="precio" class="form-control" placeholder="19990.00" required>
+                            <input type="number" step="1" name="precio" class="form-control" placeholder="29989" required>
                         </div>
                     </div>
                     <div class="d-flex justify-content-between mt-3">

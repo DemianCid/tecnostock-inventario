@@ -37,12 +37,13 @@ $productos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <th>Categoría</th>
                             <th>Stock</th>
                             <th>Precio</th>
+                            <th class="text-center">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if (empty($productos)): ?>
                             <tr>
-                                <td colspan="5" class="text-center py-4 text-muted">
+                                <td colspan="6" class="text-center py-4 text-muted">
                                     No hay productos registrados en el sistema.
                                 </td>
                             </tr>
@@ -54,6 +55,10 @@ $productos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                     <td><?= htmlspecialchars($producto['categoria'] ?? 'Sin categoría') ?></td>
                                     <td><?= $producto['stock_actual'] ?></td>
                                     <td>$<?= number_format($producto['precio'], 0, '', '.') ?></td>
+                                    <td class="text-center">
+                                        <a href="editar_producto.php?id=<?= $producto['id'] ?>" class="btn btn-warning btn-sm me-1">Editar</a>
+                                        <a href="eliminar_producto.php?id=<?= $producto['id'] ?>" class="btn btn-danger btn-sm" onclick="return confirm('¿Seguro que deseas eliminar este producto?')">Eliminar</a>
+                                    </td>
                                 </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
