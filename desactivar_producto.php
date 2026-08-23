@@ -10,7 +10,7 @@ if (!isset($_SESSION['usuario_id'])) {
 $id = $_GET['id'] ?? null;
 
 if ($id) {
-    // Consultar el estado actual
+    // Obtener estado actual para alternarlo (activo <-> inactivo)
     $stmt = $conexion->prepare("SELECT estado FROM productos WHERE id = :id");
     $stmt->execute([':id' => $id]);
     $producto = $stmt->fetch();
@@ -19,7 +19,10 @@ if ($id) {
         $nuevo_estado = ($producto['estado'] === 'activo') ? 'inactivo' : 'activo';
         
         $update = $conexion->prepare("UPDATE productos SET estado = :estado WHERE id = :id");
-        $update->execute([':estado' => $nuevo_estado, ':id' => $id]);
+        $update->execute([
+            ':estado' => $nuevo_estado,
+            ':id'     => $id
+        ]);
     }
 }
 
