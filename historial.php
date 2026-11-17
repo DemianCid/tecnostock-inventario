@@ -13,7 +13,7 @@ $sql = "
     FROM movimientos m
     LEFT JOIN productos p ON m.producto_id = p.id
     LEFT JOIN usuarios u ON m.usuario_id = u.id
-    ORDER BY m.fecha_hora DESC
+    ORDER BY m.fecha DESC
 ";
 
 $stmt = $conexion->prepare($sql);
@@ -71,7 +71,7 @@ $movimientos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         <?php else: ?>
                             <?php foreach ($movimientos as $m): ?>
                                 <tr>
-                                    <td><small class="fw-semibold text-muted"><?= date('d/m/Y H:i', strtotime($m['fecha_hora'])) ?></small></td>
+                                    <td><small class="fw-semibold text-muted"><?= date('d/m/Y H:i', strtotime($m['fecha'])) ?></small></td>
                                     <td>
                                         <?php if ($m['tipo'] === 'entrada'): ?>
                                             <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill">Entrada</span>

@@ -8,16 +8,18 @@ if (!isset($_SESSION['usuario_id'])) {
 }
 
 $sql = "
-    SELECT v.id AS venta_id, v.total, v.fecha, u.nombre AS vendedor,
-           p.nombre AS producto, dv.cantidad, dv.precio_unitario, dv.subtotal
-    FROM ventas v
-    INNER JOIN usuarios u ON v.usuario_id = u.id
-    INNER JOIN detalle_ventas dv ON v.id = dv.venta_id
-    INNER JOIN productos p ON dv.producto_id = p.id
-    ORDER BY v.id DESC
+    SELECT m.id AS movimiento_id, m.fecha, m.cantidad, m.precio_unitario,
+           p.nombre AS producto, u.nombre AS vendedor
+    FROM movimientos m
+    INNER JOIN usuarios u ON m.usuario_id = u.id
+    INNER JOIN productos p ON m.producto_id = p.id
+    WHERE m.tipo = 'salida' AND m.precio_unitario IS NOT NULL
+    ORDER BY m.id DESC
 ";
 
-$ventas = $conexion->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+$stmt = $conexion->prepare($sql);
+$stmt->execute();
+$ventas = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -61,12 +63,12 @@ $ventas = $conexion->query($sql)->fetchAll(PDO::FETCH_ASSOC);
                         <?php else: ?>
                             <?php foreach ($ventas as $v): ?>
                                 <tr>
-                                    <td><strong>#<?= $v['venta_id'] ?></strong></td>
+                                    <td><strong>#<?= $v['movimiento_id'] ?></strong></td>
                                     <td><?= date('d/m/Y H:i', strtotime($v['fecha'])) ?></td>
                                     <td class="fw-medium"><?= htmlspecialchars($v['producto']) ?></td>
                                     <td><span class="badge bg-secondary"><?= $v['cantidad'] ?></span></td>
-                                    <td>$<?= number_format($v['precio_unitario'], 0, '', '.') ?></td>
-                                    <td class="fw-bold text-success">$<?= number_format($v['subtotal'], 0, '', '.') ?></td>
+                                    <td>$<?= number_format((float)$v['precio_unitario'], 2, ',', '.') ?></td>
+                                    <td class="fw-bold text-success">$<?= number_format((float)$v['precio_unitario'] * (int)$v['cantidad'], 2, ',', '.') ?></td>
                                     <td><?= htmlspecialchars($v['vendedor']) ?></td>
                                 </tr>
                             <?php endforeach; ?>

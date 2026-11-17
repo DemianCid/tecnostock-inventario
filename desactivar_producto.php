@@ -7,23 +7,13 @@ if (!isset($_SESSION['usuario_id'])) {
     exit;
 }
 
-$id = $_GET['id'] ?? null;
+$id = filter_var($_POST['id'] ?? null, FILTER_VALIDATE_INT);
+$estado = $_POST['estado'] ?? '';
 
-if ($id) {
-    // Obtener estado actual para alternarlo (activo <-> inactivo)
-    $stmt = $conexion->prepare("SELECT estado FROM productos WHERE id = :id");
-    $stmt->execute([':id' => $id]);
-    $producto = $stmt->fetch();
-
-    if ($producto) {
-        $nuevo_estado = ($producto['estado'] === 'activo') ? 'inactivo' : 'activo';
-        
-        $update = $conexion->prepare("UPDATE productos SET estado = :estado WHERE id = :id");
-        $update->execute([
-            ':estado' => $nuevo_estado,
-            ':id'     => $id
-        ]);
-    }
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $id !== false && $id > 0
+    && in_array($estado, ['activo', 'inactivo'], true)) {
+    $update = $conexion->prepare("UPDATE productos SET estado = :estado WHERE id = :id");
+    $update->execute([':estado' => $estado, ':id' => $id]);
 }
 
 header('Location: index.php');

@@ -11,66 +11,65 @@ $mensaje = '';
 $tipo_alerta = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $producto_id = (int)$_POST['producto_id'];
-    $cantidad = (int)$_POST['cantidad'];
+    $producto_id = filter_var($_POST['producto_id'] ?? null, FILTER_VALIDATE_INT);
+    $cantidad = filter_var($_POST['cantidad'] ?? null, FILTER_VALIDATE_INT);
 
-    if ($producto_id > 0 && $cantidad > 0) {
-        $stmt = $conexion->prepare("SELECT * FROM productos WHERE id = :id AND estado = 'activo'");
-        $stmt->execute([':id' => $producto_id]);
-        $producto = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($producto_id !== false && $producto_id > 0 && $cantidad !== false && $cantidad > 0) {
+        try {
+            $conexion->beginTransaction();
 
-        if ($producto) {
-            if ($producto['stock_actual'] >= $cantidad) {
-                try {
-                    $conexion->beginTransaction();
+            $stmt = $conexion->prepare(
+                "SELECT id, nombre, precio, stock_actual FROM productos
+                 WHERE id = :id AND estado = 'activo' FOR UPDATE"
+            );
+            $stmt->execute([':id' => $producto_id]);
+            $producto = $stmt->fetch(PDO::FETCH_ASSOC);
 
-                    $subtotal = $producto['precio'] * $cantidad;
-
-                    // 1. Registrar Venta
-                    $stmtVenta = $conexion->prepare("INSERT INTO ventas (usuario_id, total) VALUES (:u_id, :total)");
-                    $stmtVenta->execute([
-                        ':u_id' => $_SESSION['usuario_id'],
-                        ':total' => $subtotal
-                    ]);
-                    $venta_id = $conexion->lastInsertId();
-
-                    // 2. Registrar Detalle
-                    $stmtDetalle = $conexion->prepare("INSERT INTO detalle_ventas (venta_id, producto_id, cantidad, precio_unitario, subtotal) VALUES (:v_id, :p_id, :cant, :precio, :sub)");
-                    $stmtDetalle->execute([
-                        ':v_id' => $venta_id,
-                        ':p_id' => $producto_id,
-                        ':cant' => $cantidad,
-                        ':precio' => $producto['precio'],
-                        ':sub' => $subtotal
-                    ]);
-
-                    // 3. Descontar Stock
-                    $stmtStock = $conexion->prepare("UPDATE productos SET stock_actual = stock_actual - :cant WHERE id = :id");
-                    $stmtStock->execute([':cant' => $cantidad, ':id' => $producto_id]);
-
-                    // 4. Registrar en Historial de Movimientos
-                    $stmtMov = $conexion->prepare("INSERT INTO movimientos (producto_id, usuario_id, tipo, cantidad) VALUES (:p_id, :u_id, 'salida', :cant)");
-                    $stmtMov->execute([
-                        ':p_id' => $producto_id,
-                        ':u_id' => $_SESSION['usuario_id'],
-                        ':cant' => $cantidad
-                    ]);
-
-                    $conexion->commit();
-                    $mensaje = "¡Venta #" . $venta_id . " registrada con éxito!";
-                    $tipo_alerta = "success";
-                } catch (Exception $e) {
-                    $conexion->rollBack();
-                    $mensaje = "Error al procesar la venta: " . $e->getMessage();
-                    $tipo_alerta = "danger";
-                }
-            } else {
+            if (!$producto) {
+                $conexion->rollBack();
+                $mensaje = 'Producto no encontrado o inactivo.';
+                $tipo_alerta = 'danger';
+            } elseif ((int)$producto['stock_actual'] < $cantidad) {
+                $conexion->rollBack();
                 $mensaje = "Stock insuficiente. Solo quedan {$producto['stock_actual']} unidades.";
-                $tipo_alerta = "warning";
+                $tipo_alerta = 'warning';
+            } else {
+                $actualizar = $conexion->prepare(
+                    "UPDATE productos SET stock_actual = stock_actual - :cantidad
+                     WHERE id = :id AND stock_actual >= :cantidad_disponible"
+                );
+                $actualizar->execute([
+                    ':cantidad' => $cantidad,
+                    ':id' => $producto_id,
+                    ':cantidad_disponible' => $cantidad
+                ]);
+
+                if ($actualizar->rowCount() !== 1) {
+                    throw new RuntimeException('No fue posible reservar el stock disponible.');
+                }
+
+                $movimiento = $conexion->prepare(
+                    "INSERT INTO movimientos
+                        (producto_id, usuario_id, tipo, cantidad, observacion, precio_unitario)
+                     VALUES (:producto_id, :usuario_id, 'salida', :cantidad, 'Venta', :precio)"
+                );
+                $movimiento->execute([
+                    ':producto_id' => $producto_id,
+                    ':usuario_id' => $_SESSION['usuario_id'],
+                    ':cantidad' => $cantidad,
+                    ':precio' => $producto['precio']
+                ]);
+
+                $conexion->commit();
+                $mensaje = 'Venta registrada correctamente.';
+                $tipo_alerta = 'success';
             }
-        } else {
-            $mensaje = "Producto no encontrado o inactivo.";
-            $tipo_alerta = "danger";
+        } catch (PDOException | RuntimeException $e) {
+            if ($conexion->inTransaction()) {
+                $conexion->rollBack();
+            }
+            $mensaje = 'No se pudo procesar la venta. Inténtalo nuevamente.';
+            $tipo_alerta = 'danger';
         }
     } else {
         $mensaje = "Selecciona un producto y una cantidad válida.";
@@ -78,7 +77,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$productos = $conexion->query("SELECT * FROM productos WHERE estado = 'activo' AND stock_actual > 0 ORDER BY nombre ASC")->fetchAll(PDO::FETCH_ASSOC);
+$stmtProductos = $conexion->prepare(
+    "SELECT id, nombre, precio, stock_actual FROM productos
+     WHERE estado = 'activo' AND stock_actual > 0 ORDER BY nombre ASC"
+);
+$stmtProductos->execute();
+$productos = $stmtProductos->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -98,20 +102,20 @@ $productos = $conexion->query("SELECT * FROM productos WHERE estado = 'activo' A
 
         <?php if (!empty($mensaje)): ?>
             <div class="alert alert-<?= $tipo_alerta ?> alert-dismissible fade show" role="alert">
-                <?= $mensaje ?>
+                <?= htmlspecialchars($mensaje) ?>
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         <?php endif; ?>
 
         <div class="card border-0 shadow-sm rounded-3 p-4 bg-white">
-            <form action="nueva_venta.php" method="POST">
+            <form action="nueva_venta.php" method="POST" id="form-venta">
                 <div class="mb-3">
                     <label class="form-label fw-medium">Seleccionar Producto</label>
                     <select name="producto_id" class="form-select" required>
                         <option value="">-- Selecciona un producto --</option>
                         <?php foreach ($productos as $p): ?>
-                            <option value="<?= $p['id'] ?>">
-                                <?= htmlspecialchars($p['nombre']) ?> (Stock: <?= $p['stock_actual'] ?>) - $<?= number_format($p['precio'], 0, '', '.') ?>
+                            <option value="<?= (int)$p['id'] ?>" data-stock="<?= (int)$p['stock_actual'] ?>">
+                                <?= htmlspecialchars($p['nombre']) ?> (Stock: <?= $p['stock_actual'] ?>) - $<?= number_format((float)$p['precio'], 2, ',', '.') ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -119,13 +123,41 @@ $productos = $conexion->query("SELECT * FROM productos WHERE estado = 'activo' A
 
                 <div class="mb-3">
                     <label class="form-label fw-medium">Cantidad</label>
-                    <input type="number" name="cantidad" class="form-control" min="1" value="1" required>
+                    <input type="number" name="cantidad" id="cantidad" class="form-control" min="1" value="1" required>
+                    <div class="form-text" id="aviso-stock" aria-live="polite"></div>
                 </div>
 
-                <button type="submit" class="btn btn-success w-100 fw-bold">Completar Venta</button>
+                <button type="submit" id="submit-venta" class="btn btn-success w-100 fw-bold">Completar Venta</button>
             </form>
         </div>
     </div>
 
+    <script>
+        const productoSelect = document.querySelector('[name="producto_id"]');
+        const cantidadInput = document.getElementById('cantidad');
+        const avisoStock = document.getElementById('aviso-stock');
+        const botonVenta = document.getElementById('submit-venta');
+
+        function validarStock() {
+            const option = productoSelect.options[productoSelect.selectedIndex];
+            const disponible = Number(option.dataset.stock || 0);
+            cantidadInput.max = disponible || '';
+            const excede = !productoSelect.value || Number(cantidadInput.value) > disponible;
+            avisoStock.textContent = excede && productoSelect.value
+                ? `Stock insuficiente: disponibles ${disponible}.`
+                : '';
+            botonVenta.disabled = excede;
+        }
+
+        productoSelect.addEventListener('change', validarStock);
+        cantidadInput.addEventListener('input', validarStock);
+        document.getElementById('form-venta').addEventListener('submit', function (event) {
+            validarStock();
+            if (botonVenta.disabled || Number(cantidadInput.value) < 1) {
+                event.preventDefault();
+            }
+        });
+        validarStock();
+    </script>
 </body>
 </html>

@@ -9,60 +9,75 @@ if (!isset($_SESSION['usuario_id'])) {
 }
 
 // Obtener lista de productos activos
-$stmt_prod = $conexion->query("SELECT id, codigo, nombre, stock_actual FROM productos WHERE estado = 'activo' ORDER BY nombre ASC");
+$stmt_prod = $conexion->prepare("SELECT id, codigo, nombre, stock_actual FROM productos WHERE estado = 'activo' ORDER BY nombre ASC");
+$stmt_prod->execute();
 $productos = $stmt_prod->fetchAll(PDO::FETCH_ASSOC);
 
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $producto_id = (int)$_POST['producto_id'];
-    $tipo        = $_POST['tipo'];
-    $cantidad    = (int)$_POST['cantidad'];
-    $observacion = trim($_POST['observacion']);
+    $producto_id = filter_var($_POST['producto_id'] ?? null, FILTER_VALIDATE_INT);
+    $tipo        = $_POST['tipo'] ?? '';
+    $cantidad    = filter_var($_POST['cantidad'] ?? null, FILTER_VALIDATE_INT);
+    $observacion = trim($_POST['observacion'] ?? '');
     $usuario_id  = $_SESSION['usuario_id'];
 
-    if ($producto_id > 0 && in_array($tipo, ['entrada', 'salida']) && $cantidad > 0) {
-        
-        // Consultar el producto seleccionado para validar el stock disponible
-        $stmt_check = $conexion->prepare("SELECT stock_actual FROM productos WHERE id = :id");
-        $stmt_check->execute([':id' => $producto_id]);
-        $producto = $stmt_check->fetch();
+    if ($producto_id !== false && $producto_id > 0
+        && in_array($tipo, ['entrada', 'salida'], true)
+        && $cantidad !== false && $cantidad > 0) {
+        try {
+            $conexion->beginTransaction();
+            $stmt_check = $conexion->prepare(
+                "SELECT stock_actual FROM productos
+                 WHERE id = :id AND estado = 'activo' FOR UPDATE"
+            );
+            $stmt_check->execute([':id' => $producto_id]);
+            $producto = $stmt_check->fetch(PDO::FETCH_ASSOC);
 
-        if ($producto) {
-            // Regla de negocio: Una salida no puede dejar el stock bajo cero
-            if ($tipo === 'salida' && $producto['stock_actual'] < $cantidad) {
-                $error = 'Error: La cantidad a retirar supera el stock actual disponible (' . $producto['stock_actual'] . ' unidades).';
+            if (!$producto) {
+                $conexion->rollBack();
+                $error = 'El producto seleccionado no existe o está inactivo.';
+            } elseif ($tipo === 'salida' && (int)$producto['stock_actual'] < $cantidad) {
+                $conexion->rollBack();
+                $error = 'Stock insuficiente: solo hay ' . $producto['stock_actual'] . ' unidades disponibles.';
             } else {
-                try {
-                    // 1. Registrar el movimiento
-                    $stmt_mov = $conexion->prepare("
-                        INSERT INTO movimientos (tipo, cantidad, observacion, producto_id, usuario_id) 
-                        VALUES (:tipo, :cantidad, :observacion, :producto_id, :usuario_id)
-                    ");
-                    $stmt_mov->execute([
-                        ':tipo'        => $tipo,
-                        ':cantidad'    => $cantidad,
-                        ':observacion' => $observacion,
-                        ':producto_id' => $producto_id,
-                        ':usuario_id'  => $usuario_id
-                    ]);
+                $operador = $tipo === 'entrada' ? '+' : '-';
+                $stmt_update = $conexion->prepare(
+                    "UPDATE productos SET stock_actual = stock_actual $operador :cantidad
+                     WHERE id = :id AND (:es_entrada = 1 OR stock_actual >= :stock_minimo)"
+                );
+                $stmt_update->execute([
+                    ':cantidad' => $cantidad,
+                    ':id' => $producto_id,
+                    ':es_entrada' => $tipo === 'entrada' ? 1 : 0,
+                    ':stock_minimo' => $cantidad
+                ]);
 
-                    // 2. Actualizar el stock del producto automáticamente
-                    $nuevo_stock = ($tipo === 'entrada') 
-                        ? $producto['stock_actual'] + $cantidad 
-                        : $producto['stock_actual'] - $cantidad;
-
-                    $stmt_update = $conexion->prepare("UPDATE productos SET stock_actual = :stock WHERE id = :id");
-                    $stmt_update->execute([':stock' => $nuevo_stock, ':id' => $producto_id]);
-
-                    header('Location: index.php');
-                    exit;
-                } catch (PDOException $e) {
-                    $error = 'Error en el servidor al registrar el movimiento.';
+                if ($stmt_update->rowCount() !== 1) {
+                    throw new RuntimeException('No fue posible actualizar el stock.');
                 }
+
+                $stmt_mov = $conexion->prepare(
+                    "INSERT INTO movimientos (tipo, cantidad, observacion, producto_id, usuario_id)
+                     VALUES (:tipo, :cantidad, :observacion, :producto_id, :usuario_id)"
+                );
+                $stmt_mov->execute([
+                    ':tipo' => $tipo,
+                    ':cantidad' => $cantidad,
+                    ':observacion' => $observacion,
+                    ':producto_id' => $producto_id,
+                    ':usuario_id' => $usuario_id
+                ]);
+
+                $conexion->commit();
+                header('Location: index.php');
+                exit;
             }
-        } else {
-            $error = 'El producto seleccionado no existe.';
+        } catch (PDOException | RuntimeException $e) {
+            if ($conexion->inTransaction()) {
+                $conexion->rollBack();
+            }
+            $error = 'No se pudo registrar el movimiento. Inténtalo nuevamente.';
         }
     } else {
         $error = 'Por favor completa todos los campos requeridos con valores válidos.';
@@ -87,13 +102,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="alert alert-danger"><?= htmlspecialchars($error) ?></div>
                 <?php endif; ?>
 
-                <form action="registrar_movimiento.php" method="POST">
+                <form action="registrar_movimiento.php" method="POST" id="form-movimiento">
                     <div class="mb-3">
                         <label class="form-label">Producto</label>
-                        <select name="producto_id" class="form-select" required>
+                        <select name="producto_id" id="producto_id" class="form-select" required>
                             <option value="">-- Seleccionar Producto --</option>
                             <?php foreach ($productos as $p): ?>
-                                <option value="<?= $p['id'] ?>">
+                                <option value="<?= (int)$p['id'] ?>" data-stock="<?= (int)$p['stock_actual'] ?>">
                                     <?= htmlspecialchars($p['nombre']) ?> (Código: <?= htmlspecialchars($p['codigo']) ?> | Stock actual: <?= $p['stock_actual'] ?>)
                                 </option>
                             <?php endforeach; ?>
@@ -102,7 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <div class="mb-3">
                         <label class="form-label">Tipo de Movimiento</label>
-                        <select name="tipo" class="form-select" required>
+                        <select name="tipo" id="tipo" class="form-select" required>
                             <option value="entrada">Entrada (Aumenta stock)</option>
                             <option value="salida">Salida (Disminuye stock)</option>
                         </select>
@@ -110,7 +125,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <div class="mb-3">
                         <label class="form-label">Cantidad</label>
-                        <input type="number" name="cantidad" class="form-control" min="1" placeholder="Ej: 10" required>
+                        <input type="number" name="cantidad" id="cantidad" class="form-control" min="1" placeholder="Ej: 10" required>
+                        <div class="form-text" id="aviso-stock" aria-live="polite"></div>
                     </div>
 
                     <div class="mb-3">
@@ -120,11 +136,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <div class="d-flex justify-content-between mt-4">
                         <a href="index.php" class="btn btn-secondary">Cancelar</a>
-                        <button type="submit" class="btn btn-primary">Guardar Movimiento</button>
+                        <button type="submit" id="guardar-movimiento" class="btn btn-primary">Guardar Movimiento</button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
+    <script>
+        const productoSelect = document.getElementById('producto_id');
+        const tipoSelect = document.getElementById('tipo');
+        const cantidadInput = document.getElementById('cantidad');
+        const avisoStock = document.getElementById('aviso-stock');
+        const botonGuardar = document.getElementById('guardar-movimiento');
+
+        function validarStockSalida() {
+            const option = productoSelect.options[productoSelect.selectedIndex];
+            const disponible = Number(option.dataset.stock || 0);
+            const esSalida = tipoSelect.value === 'salida';
+            cantidadInput.max = esSalida && disponible ? disponible : '';
+            const excede = esSalida && Number(cantidadInput.value) > disponible;
+            avisoStock.textContent = excede ? `Stock insuficiente: disponibles ${disponible}.` : '';
+            botonGuardar.disabled = excede;
+        }
+
+        productoSelect.addEventListener('change', validarStockSalida);
+        tipoSelect.addEventListener('change', validarStockSalida);
+        cantidadInput.addEventListener('input', validarStockSalida);
+        document.getElementById('form-movimiento').addEventListener('submit', function (event) {
+            validarStockSalida();
+            if (botonGuardar.disabled || Number(cantidadInput.value) < 1) {
+                event.preventDefault();
+            }
+        });
+        validarStockSalida();
+    </script>
 </body>
 </html>

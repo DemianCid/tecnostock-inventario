@@ -153,7 +153,7 @@ $productos = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <div class="d-flex align-items-center gap-3">
                 <div class="d-flex align-items-center gap-2 text-white-50 fs-7">
                     <div class="avatar-circle">
-                        <?= strtoupper(substr($_SESSION['usuario_nombre'], 0, 1)) ?>
+                        <?= htmlspecialchars(strtoupper(substr($_SESSION['usuario_nombre'], 0, 1))) ?>
                     </div>
                     <span class="text-light fw-medium small"><?= htmlspecialchars($_SESSION['usuario_nombre']) ?></span>
                 </div>
@@ -241,7 +241,7 @@ $productos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             <span class="badge badge-soft-success rounded-pill px-2 py-1">OK</span>
                                         <?php endif; ?>
                                     </td>
-                                    <td class="fw-semibold">$<?= number_format($p['precio'], 0, '', '.') ?></td>
+                                    <td class="fw-semibold">$<?= number_format((float)$p['precio'], 2, ',', '.') ?></td>
                                     <td>
                                         <?php if ($p['estado'] === 'activo'): ?>
                                             <span class="badge badge-soft-success rounded-pill">Activo</span>
@@ -251,9 +251,13 @@ $productos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                     </td>
                                     <td class="text-end">
                                         <a href="editar_producto.php?id=<?= $p['id'] ?>" class="btn btn-sm btn-light border me-1">Editar</a>
-                                        <a href="desactivar_producto.php?id=<?= $p['id'] ?>" class="btn btn-sm btn-outline-secondary" onclick="return confirm('¿Cambiar estado del producto?')">
-                                            <?= $p['estado'] === 'activo' ? 'Desactivar' : 'Activar' ?>
-                                        </a>
+                                        <form action="desactivar_producto.php" method="POST" class="d-inline" onsubmit="return confirm('¿Cambiar estado del producto?')">
+                                            <input type="hidden" name="id" value="<?= (int)$p['id'] ?>">
+                                            <input type="hidden" name="estado" value="<?= $p['estado'] === 'activo' ? 'inactivo' : 'activo' ?>">
+                                            <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                                <?= $p['estado'] === 'activo' ? 'Desactivar' : 'Activar' ?>
+                                            </button>
+                                        </form>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

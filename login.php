@@ -21,7 +21,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $usuario = $stmt->fetch();
 
         // Permite la clave fija de admin o valida el hash seguro
-        if ($usuario && ($clave === '123456' || password_verify($clave, $usuario['clave']))) {
+        if ($usuario && password_verify($clave, $usuario['clave'])) {
+            session_regenerate_id(true);
             $_SESSION['usuario_id']     = $usuario['id'];
             $_SESSION['usuario_nombre'] = $usuario['nombre'];
             header('Location: index.php');

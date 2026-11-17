@@ -31,15 +31,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 VALUES (:nombre, :correo, :clave, 'activo')
             ");
             
-            $stmt_insert->execute([
-                ':nombre' => $nombre,
-                ':correo' => $correo,
-                ':clave'  => $clave_hash
-            ]);
+            try {
+                $stmt_insert->execute([
+                    ':nombre' => $nombre,
+                    ':correo' => $correo,
+                    ':clave'  => $clave_hash
+                ]);
+            } catch (PDOException $e) {
+                $error = 'No se pudo crear la cuenta. Verifica los datos e inténtalo nuevamente.';
+            }
 
-            // Redirigir al login con mensaje de éxito
-            header('Location: login.php?registro=exito');
-            exit;
+            if ($error === '') {
+                header('Location: login.php?registro=exito');
+                exit;
+            }
         }
     } else {
         $error = 'Por favor completa todos los campos.';

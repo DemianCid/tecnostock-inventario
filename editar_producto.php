@@ -7,9 +7,9 @@ if (!isset($_SESSION['usuario_id'])) {
     exit;
 }
 
-$id = $_GET['id'] ?? null;
+$id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
 
-if (!$id) {
+if (!$id || $id < 1) {
     header('Location: index.php');
     exit;
 }
@@ -25,21 +25,25 @@ if (!$producto) {
 }
 
 // Obtener categorías
-$stmt_cat = $conexion->query("SELECT * FROM categorias WHERE estado = 'activo' ORDER BY nombre ASC");
+$stmt_cat = $conexion->prepare("SELECT * FROM categorias WHERE estado = 'activo' ORDER BY nombre ASC");
+$stmt_cat->execute();
 $categorias = $stmt_cat->fetchAll(PDO::FETCH_ASSOC);
 
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $codigo       = trim($_POST['codigo']);
-    $nombre       = trim($_POST['nombre']);
-    $descripcion  = trim($_POST['descripcion']);
-    $categoria_id = $_POST['categoria_id'] ?: null;
-    $stock_actual = (int)$_POST['stock_actual'];
-    $stock_minimo = (int)$_POST['stock_minimo'];
-    $precio       = round((float)$_POST['precio']);
+    $codigo       = trim($_POST['codigo'] ?? '');
+    $nombre       = trim($_POST['nombre'] ?? '');
+    $descripcion  = trim($_POST['descripcion'] ?? '');
+    $categoria_id = filter_var($_POST['categoria_id'] ?? null, FILTER_VALIDATE_INT);
+    $stock_actual = filter_var($_POST['stock_actual'] ?? null, FILTER_VALIDATE_INT);
+    $stock_minimo = filter_var($_POST['stock_minimo'] ?? null, FILTER_VALIDATE_INT);
+    $precio       = filter_var($_POST['precio'] ?? null, FILTER_VALIDATE_FLOAT);
 
-    if (!empty($codigo) && !empty($nombre) && $precio > 0) {
+    if ($codigo !== '' && $nombre !== '' && $categoria_id !== false && $categoria_id > 0
+        && $stock_actual !== false && $stock_actual >= 0
+        && $stock_minimo !== false && $stock_minimo >= 0
+        && $precio !== false && $precio >= 0) {
         try {
             $stmt = $conexion->prepare("
                 UPDATE productos 
@@ -106,7 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <div class="mb-3">
                         <label class="form-label">Categoría</label>
-                        <select name="categoria_id" class="form-select">
+                        <select name="categoria_id" class="form-select" required>
                             <option value="">-- Seleccionar Categoría --</option>
                             <?php foreach ($categorias as $cat): ?>
                                 <option value="<?= $cat['id'] ?>" <?= $cat['id'] == $producto['categoria_id'] ? 'selected' : '' ?>>
@@ -127,7 +131,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                         <div class="col-md-4 mb-3">
                             <label class="form-label">Precio ($)</label>
-                            <input type="number" step="1" name="precio" class="form-control" value="<?= (int)$producto['precio'] ?>" required>
+                            <input type="number" step="0.01" name="precio" class="form-control" value="<?= number_format((float)$producto['precio'], 2, '.', '') ?>" min="0" required>
                         </div>
                     </div>
 

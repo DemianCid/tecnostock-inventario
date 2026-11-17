@@ -1,20 +1,28 @@
 <?php
+session_start();
+if (!isset($_SESSION['usuario_id'])) {
+    header('Location: login.php');
+    exit;
+}
+
 require_once 'conexion.php';
 
 // Obtener categorías para el desplegable
-$stmt_cat = $conexion->query("SELECT * FROM categorias ORDER BY nombre ASC");
+$stmt_cat = $conexion->prepare("SELECT * FROM categorias WHERE estado = 'activo' ORDER BY nombre ASC");
+$stmt_cat->execute();
 $categorias = $stmt_cat->fetchAll(PDO::FETCH_ASSOC);
 
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $codigo = trim($_POST['codigo']);
-    $nombre = trim($_POST['nombre']);
-    $categoria_id = $_POST['categoria_id'] ?: null;
-    $stock_actual = (int)$_POST['stock_actual'];
-    $precio = round((float)$_POST['precio']); // Redondea a número entero
+    $codigo = trim($_POST['codigo'] ?? '');
+    $nombre = trim($_POST['nombre'] ?? '');
+    $categoria_id = filter_var($_POST['categoria_id'] ?? null, FILTER_VALIDATE_INT);
+    $stock_actual = filter_var($_POST['stock_actual'] ?? null, FILTER_VALIDATE_INT);
+    $precio = filter_var($_POST['precio'] ?? null, FILTER_VALIDATE_FLOAT);
 
-    if (!empty($codigo) && !empty($nombre) && $precio > 0) {
+    if ($codigo !== '' && $nombre !== '' && $categoria_id !== false && $categoria_id > 0
+        && $stock_actual !== false && $stock_actual >= 0 && $precio !== false && $precio >= 0) {
         try {
             $stmt = $conexion->prepare("
                 INSERT INTO productos (codigo, nombre, categoria_id, stock_actual, precio) 
@@ -31,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: index.php');
             exit;
         } catch (PDOException $e) {
-            $error = 'Error al guardar: El código ya existe o hubo un fallo en el servidor.';
+            $error = 'No se pudo guardar. Verifica que el código sea único y los datos sean válidos.';
         }
     } else {
         $error = 'Por favor completa todos los campos requeridos correctamente.';
@@ -53,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
             <div class="card-body">
                 <?php if ($error): ?>
-                    <div class="alert alert-danger"><?= $error ?></div>
+                    <div class="alert alert-danger"><?= htmlspecialchars($error) ?></div>
                 <?php endif; ?>
 
                 <form action="agregar_producto.php" method="POST">
@@ -67,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Categoría</label>
-                        <select name="categoria_id" class="form-select">
+                        <select name="categoria_id" class="form-select" required>
                             <option value="">-- Seleccionar Categoría --</option>
                             <?php foreach ($categorias as $cat): ?>
                                 <option value="<?= $cat['id'] ?>"><?= htmlspecialchars($cat['nombre']) ?></option>
@@ -81,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Precio</label>
-                            <input type="number" step="1" name="precio" class="form-control" placeholder="29989" required>
+                            <input type="number" step="0.01" name="precio" class="form-control" placeholder="29989.00" min="0" required>
                         </div>
                     </div>
                     <div class="d-flex justify-content-between mt-3">
