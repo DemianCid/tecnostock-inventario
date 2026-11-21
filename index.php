@@ -30,6 +30,25 @@ $sql .= " ORDER BY p.id DESC";
 $stmt = $conexion->prepare($sql);
 $stmt->execute($params);
 $productos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$stmtActivos = $conexion->prepare(
+    "SELECT COUNT(*) FROM productos WHERE estado = 'activo'"
+);
+$stmtActivos->execute();
+$totalActivos = (int)$stmtActivos->fetchColumn();
+
+$stmtStockBajo = $conexion->prepare(
+    "SELECT COUNT(*) FROM productos
+     WHERE estado = 'activo' AND stock_actual <= stock_minimo"
+);
+$stmtStockBajo->execute();
+$totalStockBajo = (int)$stmtStockBajo->fetchColumn();
+
+$stmtMovimientosHoy = $conexion->prepare(
+    "SELECT COUNT(*) FROM movimientos WHERE DATE(fecha) = CURDATE()"
+);
+$stmtMovimientosHoy->execute();
+$totalMovimientosHoy = (int)$stmtMovimientosHoy->fetchColumn();
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -139,6 +158,27 @@ $productos = $stmt->fetchAll(PDO::FETCH_ASSOC);
             color: #475569;
             border: 1px solid #e2e8f0;
         }
+
+        /* Resumen del panel */
+        .summary-card {
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .summary-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+        }
+        .summary-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
     </style>
 </head>
 <body>
@@ -201,6 +241,43 @@ $productos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     <?php endif; ?>
                 </div>
             </form>
+        </div>
+
+        <!-- Resumen general -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <div class="card summary-card h-100">
+                    <div class="card-body d-flex align-items-center gap-3 p-3">
+                        <div class="summary-icon bg-primary-subtle text-primary">P</div>
+                        <div>
+                            <div class="text-muted small fw-medium">Total Productos Activos</div>
+                            <div class="fs-4 fw-bold text-dark"><?= $totalActivos ?></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card summary-card h-100">
+                    <div class="card-body d-flex align-items-center gap-3 p-3">
+                        <div class="summary-icon bg-danger-subtle text-danger">!</div>
+                        <div>
+                            <div class="text-muted small fw-medium">Productos con Stock Bajo</div>
+                            <div class="fs-4 fw-bold text-dark"><?= $totalStockBajo ?></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card summary-card h-100">
+                    <div class="card-body d-flex align-items-center gap-3 p-3">
+                        <div class="summary-icon bg-success-subtle text-success">↗</div>
+                        <div>
+                            <div class="text-muted small fw-medium">Ventas / Movimientos del día</div>
+                            <div class="fs-4 fw-bold text-dark"><?= $totalMovimientosHoy ?></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Tabla principal limpia -->

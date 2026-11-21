@@ -3,6 +3,13 @@ CREATE DATABASE IF NOT EXISTS tecnostock
     COLLATE utf8mb4_unicode_ci;
 USE tecnostock;
 
+DROP TABLE IF EXISTS detalle_ventas;
+DROP TABLE IF EXISTS ventas;
+DROP TABLE IF EXISTS movimientos;
+DROP TABLE IF EXISTS productos;
+DROP TABLE IF EXISTS categorias;
+DROP TABLE IF EXISTS usuarios;
+
 CREATE TABLE IF NOT EXISTS usuarios (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL,
